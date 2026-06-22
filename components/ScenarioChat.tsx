@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
 import type { SimParams } from "@/lib/params";
 
 const SUGGESTIONS = [
@@ -11,58 +9,66 @@ const SUGGESTIONS = [
   "Et sur les 5 dernières années ?",
 ];
 
-/** Texte concaténé des parts d'un message. */
-function textOf(parts: { type: string; text?: string }[]): string {
-  return parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("");
-}
-function usedTool(parts: { type: string }[]): boolean {
-  return parts.some((p) => p.type.startsWith("tool-"));
-}
+type Msg = { role: "user" | "assistant"; content: string; usedTool?: boolean };
 
 export function ScenarioChat({ scenario }: { scenario: SimParams }) {
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-  });
-  const busy = status === "submitted" || status === "streaming";
+  const [busy, setBusy] = useState(false);
 
-  function send(text: string) {
+  async function send(text: string) {
     const t = text.trim();
     if (!t || busy) return;
-    sendMessage({ text: t }, { body: { scenario } });
+    const next: Msg[] = [...messages, { role: "user", content: t }];
+    setMessages(next);
     setInput("");
+    setBusy(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario,
+          messages: next.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const json = await res.json();
+      setMessages([
+        ...next,
+        { role: "assistant", content: json.text ?? "Réponse indisponible.", usedTool: json.usedTool },
+      ]);
+    } catch {
+      setMessages([
+        ...next,
+        { role: "assistant", content: "Problème de connexion. Réessaie dans un instant." },
+      ]);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="space-y-3">
       {messages.length > 0 && (
         <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-          {messages.map((m) => {
-            const text = textOf(m.parts);
-            const tool = usedTool(m.parts);
-            if (!text && !tool) return null;
-            return (
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
               <div
-                key={m.id}
-                className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
+                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  m.role === "user"
+                    ? "bg-[var(--color-brand)] text-white"
+                    : "border border-[var(--hairline)] bg-white/5 text-[var(--color-ink)]"
+                }`}
               >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-[var(--color-brand)] text-white"
-                      : "border border-[var(--hairline)] bg-white/5 text-[var(--color-ink)]"
-                  }`}
-                >
-                  {tool && m.role !== "user" && (
-                    <div className="mb-1 text-[11px] text-[var(--color-sky)]">
-                      ↻ recalculé sur données réelles
-                    </div>
-                  )}
-                  {text || <span className="text-[var(--color-muted)]">…</span>}
-                </div>
+                {m.role === "assistant" && m.usedTool && (
+                  <div className="mb-1 text-[11px] text-[var(--color-sky)]">
+                    ↻ recalculé sur données réelles
+                  </div>
+                )}
+                {m.content}
               </div>
-            );
-          })}
+            </div>
+          ))}
           {busy && (
             <div className="flex justify-start">
               <div className="rounded-2xl border border-[var(--hairline)] bg-white/5 px-4 py-2.5 text-sm text-[var(--color-muted)]">
