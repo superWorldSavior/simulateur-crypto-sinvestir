@@ -23,18 +23,25 @@ function defaultParams(): SimParams {
   };
 }
 
+/** Clé identifiant le jeu de prix nécessaire (crypto + période). */
+function priceKeyOf(p: SimParams): string {
+  return `${p.coinId}:${p.start}:${p.end}`;
+}
+
 export function Simulator() {
   const [params, setParams] = useState<SimParams>(defaultParams);
-  const [prices, setPrices] = useState<PricePoint[] | null>(null);
+  // Les prix sont étiquetés par la clé crypto+période à laquelle ils appartiennent.
+  const [priceData, setPriceData] = useState<{ key: string; prices: PricePoint[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fetchId = useRef(0);
 
-  // Les prix ne dépendent que de la crypto et de la période → on ne refetch
-  // QUE quand l'un d'eux change (débounce pour les saisies de dates). Changer
-  // le montant ou la fréquence ne déclenche aucun appel réseau.
+  const priceKey = priceKeyOf(params);
+
+  // Fetch des prix quand la crypto / période change (débounce pour les dates).
   useEffect(() => {
     const id = ++fetchId.current;
+    const key = `${params.coinId}:${params.start}:${params.end}`;
     const handle = setTimeout(async () => {
       if (params.start >= params.end) {
         setError("La date de début doit précéder la date de fin.");
@@ -49,12 +56,12 @@ export function Simulator() {
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error?.message ?? "Échec de récupération des prix.");
         if (id !== fetchId.current) return;
-        setPrices(json.prices as PricePoint[]);
+        setPriceData({ key, prices: json.prices as PricePoint[] });
         setError(null);
       } catch (e) {
         if (id !== fetchId.current) return;
         setError(e instanceof Error ? e.message : "Erreur inattendue.");
-        setPrices(null);
+        setPriceData(null);
       } finally {
         if (id === fetchId.current) setLoading(false);
       }
@@ -62,11 +69,14 @@ export function Simulator() {
     return () => clearTimeout(handle);
   }, [params.coinId, params.start, params.end]);
 
-  // Recalcul instantané (moteur pur) dès que prix / montant / fréquence changent.
+  // Prix valides UNIQUEMENT s'ils correspondent à la crypto/période courante.
+  // Sinon (changement en cours), on n'affiche pas un résultat périmé → skeleton.
+  const prices = priceData && priceData.key === priceKey ? priceData.prices : null;
+  const amountInvalid = !Number.isFinite(params.amount) || params.amount <= 0;
+
+  // Recalcul instantané (moteur pur) — montant/fréquence ne refetchent pas.
   const result = useMemo<BacktestResult | null>(() => {
-    if (!prices || prices.length < 2) return null;
-    if (!Number.isFinite(params.amount) || params.amount <= 0) return null;
-    if (params.start >= params.end) return null;
+    if (!prices || prices.length < 2 || amountInvalid || params.start >= params.end) return null;
     try {
       return runBacktest({
         prices,
@@ -78,10 +88,9 @@ export function Simulator() {
     } catch {
       return null;
     }
-  }, [prices, params.amount, params.frequency, params.start, params.end]);
+  }, [prices, params.amount, params.frequency, params.start, params.end, amountInvalid]);
 
   const coin = getCoin(params.coinId)!;
-  const amountInvalid = !Number.isFinite(params.amount) || params.amount <= 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
@@ -102,7 +111,7 @@ export function Simulator() {
             <AiAnalysis params={params} ready={!loading} />
           </>
         ) : (
-          <ResultsSkeleton hint="Chargement des données de marché…" />
+          <ResultsSkeleton hint={`Chargement des données ${coin.name}…`} />
         )}
       </div>
     </div>
