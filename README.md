@@ -42,12 +42,11 @@ Aucune clé n'est nécessaire pour les **prix** (source publique sans clé, cf. 
 rendu s'y intègre directement : page statique pour le SEO + routes serveur pour les
 appels externes (prix, LLM).
 
-**Données de prix : Binance, pas CoinGecko.** Le simulateur d'origine s'appuie sur des
-données de marché historiques. CoinGecko (l'API « évidente ») renvoie désormais `401`
-sans clé sur l'endpoint historique → trop fragile pour une démo. J'utilise le miroir
-public `data-api.binance.vision` : **gratuit, sans clé, et non géo-bloqué** (point
-important : Vercel s'exécute en région US, où `api.binance.com` renvoie `451`). Les 15
-cryptos supportées ont toutes une paire `…EUR`. Un cache mémoire amortit les appels.
+**Données de prix : Binance.** Source publique gratuite et **sans clé**
+(`data-api.binance.vision`), fiable depuis Vercel (région US) — contrairement à
+`api.binance.com`, géo-bloqué côté US. Les 15 cryptos supportées ont une paire `…EUR`,
+et un cache mémoire amortit les appels. (J'avais d'abord branché CoinGecko, qui exige
+désormais une clé sur l'historique.)
 
 **La couche IA est le différenciateur.** Le poste est « Dev IA » et la marque fait de la
 pédagogie financière. Les simulateurs S'investir affichent déjà une phrase de synthèse
