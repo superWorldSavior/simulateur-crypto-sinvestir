@@ -8,7 +8,7 @@ On rejoue une stratégie d'investissement progressif (DCA) en crypto sur l'histo
 réel du marché, puis une IA explique le résultat et répond aux questions de suivi en
 **recalculant** les variantes sur les vraies données.
 
-- **Démo en ligne** : _(à compléter après déploiement Vercel)_
+- **Démo en ligne** : https://simulateur-crypto-sinvestir-mu.vercel.app
 - **Stack** : Next.js 16 (App Router) · TypeScript · Tailwind v4 · AI SDK v6 · Vercel
 
 ---
